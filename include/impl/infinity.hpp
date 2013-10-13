@@ -1,5 +1,5 @@
 /*
-  FILE: hmm.hpp
+  FILE: gamma.hpp
   AUTHOR: Shane Neph
   CREATE DATE: Sat Oct 12 22:07:12 PDT 2013
 */
@@ -22,18 +22,40 @@
 //    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-#ifndef CI_HMM_R_HPP
-#define CI_HMM_R_HPP
+#ifndef INFINITY_HMM_R_HPP
+#define INFINITY_HMM_R_HPP
 
-#include "impl/bkd.hpp"
-#include "impl/efun.hpp"
-#include "impl/evalp.hpp"
-#include "impl/fwd.hpp"
-#include "impl/gamma.hpp"
-#include "impl/infinity.hpp"
-#include "impl/train.hpp"
-#include "impl/viterbi.hpp"
-#include "impl/xi.hpp"
+#include <climits>
 
+namespace ci {
 
-#endif // CI_HMM_R_HPP
+  namespace details {
+    template <bool b, typename T>
+    struct infinite {
+      static const T value;
+    };
+
+    template <bool b, typename T>
+    const T infinite<b, T>::value = std::numeric_limits<T>::max();
+
+    template <typename T>
+    struct infinite<true, T> {
+      static const T value;
+    };
+
+    template <typename T>
+    const T infinite<true, T>::value = std::numeric_limits<T>::infinity();
+
+  } // namespace details
+
+  //================================================
+  // Get infinity representation for numeric type T
+  //================================================
+  template <typename T>
+  inline T inf() {
+    return(details::infinite< std::numeric_limits<T>::has_infinity, T >::value);
+  }
+
+} // namespace ci
+
+#endif // INFINITY_HMM_R_HPP

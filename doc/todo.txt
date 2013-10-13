@@ -1,0 +1,36 @@
+Author: Shane Neph
+Date: Sat Oct 12 22:16:29 PDT 2013
+
+
+1) Add check that certain quantities are unsigned such as the normalizer variable in gamma/xi.hpp
+
+2) Add check that model stuff has consistent dimensionality (application, not each function call)
+
+3) Test
+
+4) Compare to other implemenations including hmmseg in time/memory/correctness
+
+5) Work on text-recognition
+
+6) Add policies for emission function : discrete vs. continuous; different kinds of continuous functions (gaussian vs. poisson)
+
+7) For finite case, consider reading in inputs and automagically creating enough emission symbols (randomly initialized) to deal with things (ie; input observations are not 0-based and consecutive -> make them so).
+   Perhaps just an intermediate filter would be best.
+
+8) In viterbi, consider making delta and array of vectors of size 2xNStates, rather than NStatesx2 and relying upon vector's resize
+
+9) Consider making more functions spit to an iterator where applicable (like viterbi).  Perhaps train()
+
+10) Think more about wrapping up in a class interface.  Not all functions require emission, probably.  This goes along with policy-based stuff.
+
+11) Consider the possibility of observed being an iterator instead of reading all into memory --> would be tough
+
+12) Consider making different function interfaces based upon model type (assuming we roll everything into class interface)
+
+13) Need to re-test BackCache<> when # observations > cache size
+
+Most immediate:
+1) Need to verify train_mem()
+2) Should time all train()'s and graph in R as part of documentation system
+
+emission is [nstates] x [nsymbols]

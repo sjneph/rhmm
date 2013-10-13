@@ -1,4 +1,4 @@
-hidden markov model implementation
-===================================
+## Scalable Hidden Markov Model ##
+> Shane Neph
 
-something inspired by an R package I once played with - written to scale to big data.
+This was inspired by an R package I once played with, but is written to scale to big data.

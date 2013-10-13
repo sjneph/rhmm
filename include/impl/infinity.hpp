@@ -1,5 +1,5 @@
 /*
-  FILE: gamma.hpp
+  FILE: infinity.hpp
   AUTHOR: Shane Neph
   CREATE DATE: Sat Oct 12 22:07:12 PDT 2013
 */

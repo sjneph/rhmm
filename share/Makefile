@@ -1,4 +1,4 @@
-MAIN	= ../../include
+MAIN	= ../include
 CC	= g++
 FLAGS	= -Wall -ansi -pedantic -s -O3 -iquote$(MAIN) -static
 

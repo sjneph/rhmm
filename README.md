@@ -7,7 +7,8 @@ a discrete HMM, though it is modified to give various tradeoffs between memory a
 Just type 'make' in the main directory and run with bin/rHMM.
 
 #######################################
-Usage:
+Usage
+
 rHMM
 
 USAGE:

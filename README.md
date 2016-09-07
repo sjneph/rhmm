@@ -9,6 +9,7 @@ Just type 'make' in the main directory and run with bin/rHMM.
 #######################################
 Usage:
 rHMM
+
 USAGE:
 0) --help or --version
 

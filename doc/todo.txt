@@ -4,3 +4,5 @@ Author: Shane Neph
 1) Compare to other implemenations including hmmseg in time/memory/correctness
 
 2) Pay special attention to the correctness of 'probability'
+
+3) Add direct support for characters (e.g.; dna) and strings

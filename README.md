@@ -11,9 +11,13 @@ Usage:
 rHMM
 USAGE:
 0) --help or --version
+
 1) train [--seed <+integer>] <number-states> <number-iterations> <observed-sequence-file>
+
 2) probability <hmm-parameters-file> <observed-sequence-file>
+
 3) decode <hmm-parameters-file> <observed-sequence-file>
+
 4) train-and-decode [--seed <+integer>] <number-states> <number-iterations> <observed-sequence-file>
 
 All output is sent to stdout.

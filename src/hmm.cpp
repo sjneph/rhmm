@@ -8,19 +8,23 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <map>
 #include <numeric>
+#include <set>
 #include <string>
 #include <vector>
 
 #include "hmm.hpp"
 
 typedef float T;
+typedef std::size_t U;
 
 static const std::string version = "0.1";
 struct Help {};
 struct NoInput {};
 struct Version {};
 static const std::string nstate_header = "NStates:";
+static const std::string label_header = "Labels";
 static const std::string initial_header = "Initial-Probabilities:"; // not log
 static const std::string transitional_header = "Transitional-Log-Probabilities:"; // log
 static const std::string emission_header = "Emission-Log-Probabilities:";
@@ -73,16 +77,16 @@ void do_exp(std::vector<T>& v) {
 std::string Usage(std::string s) {
   std::string msg = s + "\n\nUSAGE:";
   msg += "\n0) --help or --version";
-  msg += "\n1) train [--seed <+integer>] <number-states> <number-iterations> <observed-sequence-file>";
-  msg += "\n2) probability <hmm-parameters-file> <observed-sequence-file>";
-  msg += "\n3) decode <hmm-parameters-file> <observed-sequence-file>";
-  msg += "\n4) train-and-decode [--seed <+integer>] <number-states> <number-iterations> <observed-sequence-file>";
+  msg += "\n1) train [--seed <+integer>] <number-states> <number-iterations> <observations-file>";
+  msg += "\n2) probability <hmm-parameters-file> <observations-file>";
+  msg += "\n3) decode <hmm-parameters-file> <observations-file>";
+  msg += "\n4) train-and-decode [--seed <+integer>] <number-states> <number-iterations> <observations-file>";
   msg += "\n\nAll output is sent to stdout.";
-  msg += "\nYou can train an hmm, save its output, and then use it as an <hmm-parameters-file> to";
-  msg += "\ndetermine the probability of another observed sequence, or to decode the hidden states";
-  msg += "\nof another observed sequence.";
-  msg += "\nYou can also train an hmm on an observed sequence and decode the hidden states of that";
-  msg += "\nsame sequence using train-and-decode.";
+  msg += "\nYou can train a discrete hmm, save its output, and then use it as an <hmm-parameters-file> to";
+  msg += "\ndetermine the probability of another set of observations, or to decode the hidden states";
+  msg += "\nof another set of observations.";
+  msg += "\nYou can also train an hmm on observations and decode the hidden states of that";
+  msg += "\ninformation using train-and-decode.";
   return msg;
 }
 
@@ -105,11 +109,13 @@ struct Input {
   int _niters;
   int _nstates;
   int _seed;
+  bool _read_params;
   std::string _src;
   std::string _params;
   Ops _operation;
   std::vector<T> _initial, _observed;
   std::vector<std::vector<T>> _transition, _emission;
+  std::map<std::string, std::size_t> _mapID;
   static constexpr int _MAXITER = 1000000; // can be bigger; likely an error if you exceeded this though
   static constexpr int _MAXSTATES = 10000; // can be bigger; likely an error if you exceeded this though
 
@@ -171,6 +177,11 @@ void output(const Input& input) {
   if ( input._operation == Ops::TRAIN ) {
     std::cout << nstate_header << " " << input._nstates << std::endl;
 
+    std::cout << label_header << std::endl << "{" << std::endl;;
+    for ( auto& i : input._mapID )
+      std::cout << i.second << " " << i.first << std::endl;
+    std::cout << "}" << std::endl;
+
     std::cout << initial_header;
     for ( std::size_t i = 0; i < input._initial.size(); ++i )
       std::cout << " " << input._initial[i];
@@ -214,11 +225,11 @@ void output(const Input& input) {
   } else if ( input._operation == Ops::DECODE ) { \
     auto initial_cpy = input._initial;
     do_exp(initial_cpy);
-    std::ostream_iterator<T> os(std::cout, " ");
+    std::ostream_iterator<U> os(std::cout, " ");
     ci::hmm::viterbi(input._observed, initial_cpy, input._transition, input._emission, os);
     std::cout << std::endl;
   } else { // Ops::TRAIN_AND_DECODE
-    std::ostream_iterator<T> os(std::cout, " ");
+    std::ostream_iterator<U> os(std::cout, " ");
     ci::hmm::viterbi(input._observed, input._initial, input._transition, input._emission, os);
     std::cout << std::endl;
   }
@@ -232,7 +243,9 @@ struct ByLine : public std::string {
   }
 };
 
-Input::Input(int argc, char** argv) : _niters(1), _nstates(1), _seed(std::time(NULL)) {
+Input::Input(int argc, char** argv) : _niters(1), _nstates(1),
+                                      _seed(std::time(NULL)),
+                                      _read_params(false) {
   for ( int i = 1; i < argc; ++i ) {
     if ( std::string(argv[i]) == "--help" )
       throw(Help());
@@ -308,10 +321,29 @@ Input::Input(int argc, char** argv) : _niters(1), _nstates(1), _seed(std::time(N
 
 void Input::read_data() {
   std::ifstream f(_src.c_str());
-  T d;
+  std::string s;
   _observed.clear();
-  while ( f>>d )
-    _observed.push_back(d);
+  std::set<std::string> other;
+  if ( !_read_params )
+    _mapID.clear();
+  auto iter = _mapID.end();
+
+  int counter = 0;
+  while ( f>>s ) {
+    if ( (iter = _mapID.find(s)) != _mapID.end() )
+      _observed.push_back(iter->second);
+    else {
+      if ( _read_params ) { // we have the mapping for internal state labels; stay consistent
+        if ( other.find(s) == other.end() ) {
+          std::cerr << "Warning! Found a new label that was not in the training set for this HMM" << std::endl;
+          std::cerr << "New Label: " << s << " assigned to " << _mapID.begin()->first << std::endl;
+          other.insert(s);
+        }
+        _observed.push_back(_mapID.begin()->second); // this label was not there during training
+      } else // this create a new ID for label s
+        _observed.push_back(_mapID[s] = counter++);
+    }
+  } // while
 }
 
 void Input::read_parameters() {
@@ -319,7 +351,9 @@ void Input::read_parameters() {
   const std::string reals = ints + "-.";
   bool in_trans = false;
   bool in_emission = false;
+  bool in_label = false;
 
+  _read_params = true;
   _nstates = -1;
   std::ifstream infile(_params.c_str());
   ByLine bl;
@@ -330,6 +364,10 @@ void Input::read_parameters() {
         if ( vec.size() != 2 || vec[1].find_first_not_of(ints) != std::string::npos )
           throw("Bad parameters input file.  See NStates:");
         _nstates = std::atoi(vec[1].c_str());
+      } else if ( vec[0] == label_header ) {
+        in_label = true;
+        in_emission = false;
+        in_trans = false;
       } else if ( vec[0] == initial_header ) {
         for ( std::size_t j = 1; j < vec.size(); ++j ) {
           if ( vec[j].find_first_not_of(reals) != std::string::npos )
@@ -340,9 +378,11 @@ void Input::read_parameters() {
       } else if ( bl == transitional_header ) {
         in_trans = true;
         in_emission = false;
+        in_label = false;
       } else if ( bl == emission_header ) {
         in_emission = true;
         in_trans = false;
+        in_label = false;
       } else if ( in_trans ) {
         if ( bl == "{" ) continue;
         else if ( bl == "}" ) in_trans = false;
@@ -357,7 +397,7 @@ void Input::read_parameters() {
         }
       } else if ( in_emission ) {
         if ( bl == "{" ) continue;
-        else if ( bl == "}" ) in_trans = false;
+        else if ( bl == "}" ) in_emission = false;
         else {
           std::vector<T> tmp;
           for ( std::size_t j = 0; j < vec.size(); ++j ) {
@@ -366,6 +406,16 @@ void Input::read_parameters() {
             tmp.push_back(std::stof(vec[j]));
           } // for
           _emission.push_back(tmp);
+        }
+      } else if ( in_label ) {
+        if ( bl == "{" ) continue;
+        else if ( bl == "}" ) in_label = false;
+        else {
+          if ( vec.size() != 2 )
+            throw("Bad parameters input file.  Expect 2 columns in " + label_header);
+          if ( vec[0].find_first_not_of(ints) != std::string::npos )
+            throw("Bad parameters input file.  Expect integer in first column of " + label_header);
+          _mapID[vec[1]] = std::atoi(vec[0].c_str());
         }
       }
     } else {
@@ -380,6 +430,8 @@ void Input::read_parameters() {
     throw("Did not find " + transitional_header + " in " + _params);
   if ( _emission.empty() )
     throw("Did not find " + emission_header + " in " + _params);
+  if ( _mapID.empty() )
+    throw("Did not find " + label_header + " in " + _params);
   if ( _nstates <= 0 || _nstates > _MAXSTATES )
     throw("Problem with (may be missing) " + nstate_header + " in " + _params);
 }

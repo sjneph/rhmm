@@ -257,7 +257,7 @@ namespace hmm {
     const std::size_t nobs = observed.size();
     const std::size_t nsymbols = emission[0].size();
 
-    // Involatile copies of originals necessary
+    // involatile copies of originals necessary
     const I init(initial);
     const T trans(transition);
     const E emis(emission);

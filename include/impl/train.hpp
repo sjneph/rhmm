@@ -185,12 +185,12 @@ namespace hmm {
 
     // First gamma() call
     gamma(observed, init, transition, emission, 1, *beta, alphaG, gam);
-    if ( ! beta )
+    if ( !beta )
       return;
     delete beta;
 
     beta = cache.Next(); // xi's beta stays ahead of gamma's by one
-    if ( ! beta )
+    if ( !beta )
       return;
 
     // First xi() call

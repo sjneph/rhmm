@@ -124,10 +124,9 @@ namespace hmm {
 
     std::size_t nstates = initial.size();
 
-    U normalizer = inf<U>();
     forward_next(observed, initial, transition, emission, index, alpha);
 
-    normalizer = inf<U>();
+    U normalizer = inf<U>();
     for ( std::size_t i = 0; i < nstates; ++i ) {
       gam[i] = elnproduct(alpha[i], beta[i]);
       normalizer = elnsum(normalizer, gam[i]);

@@ -25,6 +25,7 @@
 #ifndef VITERBI_HMM_R_HPP
 #define VITERBI_HMM_R_HPP
 
+#include <array>
 #include <cmath>
 #include <vector>
 
@@ -41,12 +42,11 @@ namespace hmm {
                const E& emission,
                OutIter out) {
     typedef typename O::value_type U;
-    std::size_t nstates = initial.size();
+    const std::size_t nstates = initial.size();
     std::size_t nobs = observed.size();
-    std::vector< std::vector<U> > delta(nstates); // only need [2] x [n_states] 2-d array
+    std::vector<std::array<U,2>> delta(nstates); // only need [2] x [n_states] 2-d array
     std::size_t index = 0;
     for ( std::size_t i = 0; i < nstates; ++i ) {
-      delta[i].resize(2);
       delta[i][0] = elnproduct(initial[i], emission[i][observed[0]]);
       if ( delta[i][0] > delta[index][0] )
         index = i;

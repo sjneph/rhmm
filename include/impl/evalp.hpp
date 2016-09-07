@@ -52,7 +52,7 @@ namespace hmm {
     const std::size_t nstates = initial.size();
     std::vector<float> alpha(nstates);
 
-    forward_index(observed, initial,transition, emission, tsize, alpha);
+    forward_index(observed, initial, transition, emission, tsize, alpha);
     float enlp = inf<float>();
     for ( std::size_t i = 0; i < alpha.size(); ++i )
       enlp = elnsum(enlp, alpha[i]);

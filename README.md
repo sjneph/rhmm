@@ -11,7 +11,6 @@ Usage
 
 rHMM
 
-USAGE:
 0) --help or --version
 
 1) train [--seed <+integer>] <number-states> <number-iterations> <observed-sequence-file>

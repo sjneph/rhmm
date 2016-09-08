@@ -24,6 +24,7 @@ struct Help {};
 struct NoInput {};
 struct Version {};
 static const std::string nstate_header = "NStates:";
+static const std::string nsymbol_header = "NSymbols:";
 static const std::string label_header = "Labels";
 static const std::string initial_header = "Initial-Probabilities:"; // not log
 static const std::string transitional_header = "Transitional-Log-Probabilities:"; // log
@@ -77,10 +78,10 @@ void do_exp(std::vector<T>& v) {
 std::string Usage(std::string s) {
   std::string msg = s + "\n\nUSAGE:";
   msg += "\n0) --help or --version";
-  msg += "\n1) train [--seed <+integer>] <number-states> <number-iterations> <observations-file>";
+  msg += "\n1) train [--verbose] [--seed=<+integer>] <number-states> <number-iterations> <observations-file>";
   msg += "\n2) probability <hmm-parameters-file> <observations-file>";
   msg += "\n3) decode <hmm-parameters-file> <observations-file>";
-  msg += "\n4) train-and-decode [--seed <+integer>] <number-states> <number-iterations> <observations-file>";
+  msg += "\n4) train-and-decode [--verbose] [--seed=<+integer>] <number-states> <number-iterations> <observations-file>";
   msg += "\n\nAll output is sent to stdout.";
   msg += "\nYou can train a discrete hmm, save its output, and then use it as an <hmm-parameters-file> to";
   msg += "\ndetermine the probability of another set of observations, or to decode the hidden states";
@@ -108,8 +109,10 @@ struct Input {
 
   int _niters;
   int _nstates;
-  int _seed;
+  int _nsymbols;
+  bool _verbose;
   bool _read_params;
+  int _seed;
   std::string _src;
   std::string _params;
   Ops _operation;
@@ -160,11 +163,22 @@ void do_work(Input& input) {
   if ( input._operation == Ops::TRAIN || input._operation == Ops::TRAIN_AND_DECODE ) {
     auto last_trans = input._transition;
     auto last_emiss = input._emission;
+    double log_likelihood = 0;
     for ( int i = 0; i < input._niters; ++i ) {
       ci::hmm::train(input._observed, input._initial, input._transition, input._emission);
       if ( input._emission == last_emiss ) {
         if ( input._transition == last_trans )
           break;
+      } else {
+        log_likelihood = ci::hmm::evalp(input._observed, input._initial, input._transition, input._emission);
+      }
+
+      if ( input._verbose ) {
+        std::cout << "# iteration " << i+1 << std::endl;
+        std::cout << "# log-likelihood " << log_likelihood << std::endl;
+        std::cout << "# ";
+        std::copy(input._observed.begin(), input._observed.end(), std::ostream_iterator<U>(std::cout, " "));
+        std::cout << std::endl;
       }
       last_trans = input._transition;
       last_emiss = input._emission;
@@ -176,6 +190,7 @@ void do_work(Input& input) {
 void output(const Input& input) {
   if ( input._operation == Ops::TRAIN ) {
     std::cout << nstate_header << " " << input._nstates << std::endl;
+    std::cout << nsymbol_header << " " << input._nsymbols << std::endl;
 
     std::cout << label_header << std::endl << "{" << std::endl;;
     for ( auto& i : input._mapID )
@@ -243,9 +258,9 @@ struct ByLine : public std::string {
   }
 };
 
-Input::Input(int argc, char** argv) : _niters(1), _nstates(1),
-                                      _seed(std::time(NULL)),
-                                      _read_params(false) {
+Input::Input(int argc, char** argv) : _niters(1), _nstates(1), _nsymbols(0),
+                                      _verbose(false), _read_params(false),
+                                      _seed(std::time(NULL)) {
   for ( int i = 1; i < argc; ++i ) {
     if ( std::string(argv[i]) == "--help" )
       throw(Help());
@@ -263,27 +278,40 @@ Input::Input(int argc, char** argv) : _niters(1), _nstates(1),
   const std::string todo = argv[nextc++];
   std::string next = argv[nextc++];
   if ( todo == "train" || todo == "train-and-decode" ) {
-    if ( argc != 5 && argc != 7 )
+    if ( (argc < 5) || (argc > 7) )
       throw("Wrong number of args for '" + todo + ".  See --help");
     _operation = Ops::TRAIN;
     if ( todo == "train-and-decode" )
       _operation = Ops::TRAIN_AND_DECODE;
-    if ( next == "--seed" ) {
-      next = argv[nextc++];
-      if ( next.find_first_not_of(ints) != std::string::npos )
-        throw("Bad number - expect a +integer for --seed.  See --help");
-      _seed = std::atoi(next.c_str());
-      std::srand(_seed);
-      next = argv[nextc++];
-    }
+    int count = argc;
+    while ( next.find_first_of("--seed") == 0 || next.find_first_of("--verbose") == 0 ) {
+      if ( --count == 0 )
+        break;
+      if ( next == "--verbose" ) {
+        _verbose = true;
+      } else {
+        auto v = split(next, "=");
+        if ( v.size() != 2 )
+          throw("Bad number.  Expect a +integer for " + next + ".  See --help");
+        if ( v[1].find_first_not_of(ints) != std::string::npos )
+          throw("Bad number. Expect a +integer for " + next + ".  See --help");
+        _seed = std::atoi(v[1].c_str());
+        std::srand(_seed);
+      }
+      if ( nextc != argc )
+        next = argv[nextc++];
+      else
+        break;
+    } // while
+    if ( count != 5 )
+      throw("Wrong number (or order) of arguments for " + todo + ".  See --help");
     if ( next.find_first_not_of(ints) != std::string::npos )
-      throw("Bad argument - expect a +integer for <number-states>.  See --help");
+      throw("Bad argument: expect a +integer for <number-states>.  See --help");
     _nstates = std::atoi(next.c_str());
     next = argv[nextc++];
     if ( next.find_first_not_of(ints) != std::string::npos )
       throw("Bad argument - expect a +integer for <number-iterations>.  See --help");
     _niters = std::atoi(next.c_str());
-    initialize_parameters();
   } else if ( todo == "probability" ) {
     if ( argc != 4 )
       throw("Wrong number of args for '" + todo + ".  See --help");
@@ -316,7 +344,13 @@ Input::Input(int argc, char** argv) : _niters(1), _nstates(1),
   if (!f)
     throw("Input file not found: " + _src);
 
-  read_data(); // read observations
+  read_data(); // read observations; get _nsymbols from the data
+
+  if ( todo == "train" || todo == "train-and-decode" ) {
+    initialize_parameters(); // only after read_data() due to _nsymbols
+    if ( _nsymbols == 0 )
+      throw("Didn't find any data");
+  }
 }
 
 void Input::read_data() {
@@ -344,11 +378,17 @@ void Input::read_data() {
         _observed.push_back(_mapID[s] = counter++);
     }
   } // while
+  if ( _nsymbols == 0 )
+    _nsymbols = _mapID.size();
+  else {
+    if ( static_cast<std::size_t>(_nsymbols) < _mapID.size() )
+      std::cerr << "Warning!  1 or more labels in the training data were not found in: " << _src << std::endl;
+  }
 }
 
 void Input::read_parameters() {
   const std::string ints = "0123456789";
-  const std::string reals = ints + "-.";
+  const std::string reals = ints + "e-+.";
   bool in_trans = false;
   bool in_emission = false;
   bool in_label = false;
@@ -360,10 +400,16 @@ void Input::read_parameters() {
   while ( infile >> bl ) {
     auto vec = split(bl, " ");
     if ( !vec.empty() ) {
-      if ( vec[0] == nstate_header ) {
+      if ( vec[0] == "#" ) { // comment
+        continue;
+      } else if ( vec[0] == nstate_header ) {
         if ( vec.size() != 2 || vec[1].find_first_not_of(ints) != std::string::npos )
           throw("Bad parameters input file.  See NStates:");
         _nstates = std::atoi(vec[1].c_str());
+      } else if ( vec[0] == nsymbol_header ) {
+        if ( vec.size() != 2 || vec[1].find_first_not_of(ints) != std::string::npos )
+          throw("Bad parameters input file.  See NStates:");
+        _nsymbols = std::atoi(vec[1].c_str());
       } else if ( vec[0] == label_header ) {
         in_label = true;
         in_emission = false;
@@ -390,7 +436,7 @@ void Input::read_parameters() {
           std::vector<T> tmp;
           for ( std::size_t j = 0; j < vec.size(); ++j ) {
             if ( vec[j].find_first_not_of(reals) != std::string::npos )
-              throw("Bad parameters input file.  See " + transitional_header);
+              throw("Bad parameters input file.  See " + vec[j] + " in " + transitional_header);
             tmp.push_back(std::stof(vec[j]));
           } // for
           _transition.push_back(tmp);
@@ -402,7 +448,7 @@ void Input::read_parameters() {
           std::vector<T> tmp;
           for ( std::size_t j = 0; j < vec.size(); ++j ) {
             if ( vec[j].find_first_not_of(reals) != std::string::npos )
-              throw("Bad parameters input file.  See " + emission_header);
+              throw("Bad parameters input file.  See " + vec[j] + " in " + emission_header);
             tmp.push_back(std::stof(vec[j]));
           } // for
           _emission.push_back(tmp);
@@ -417,10 +463,13 @@ void Input::read_parameters() {
             throw("Bad parameters input file.  Expect integer in first column of " + label_header);
           _mapID[vec[1]] = std::atoi(vec[0].c_str());
         }
+      } else {
+        std::cerr << "Unexpected garbage row in (could just be whitespace) in " << _params << "\nSee: " << bl << std::endl;
+        std::cerr << "Continuing..." << std::endl;
       }
     } else {
-      std::cerr << "Unexpected garbage row (could be white space) in " << _params << "\nSee: " << bl << std::endl;
-      std::cerr << "Continuing..." << std::endl;
+       std::cerr << "Unexpected line with nothing on it (other than spaces perhaps) in " << _params << std::endl;
+       std::cerr << "Continuing...." << std::endl;
     }
   } // while
 
@@ -440,21 +489,26 @@ void Input::initialize_parameters() {
   const int MOD = 100;
   for ( int i = 0; i < _nstates; ++i ) {
     _initial.push_back(std::rand()%MOD);
-    std::vector<T> tmp1, tmp2;
-    for (int j = 0; j < _nstates; ++j ) {
-      tmp1.push_back(std::rand()%MOD);
-      tmp2.push_back(std::rand()%MOD);
-    } // for
-    auto sum1 = std::accumulate(tmp1.begin(), tmp1.end(), (T)0);
-    auto sum2 = std::accumulate(tmp2.begin(), tmp2.end(), (T)0);
-    std::transform(tmp1.begin(), tmp1.end(), tmp1.begin(), std::bind2nd(std::divides<T>(), sum1));
-    std::transform(tmp2.begin(), tmp2.end(), tmp2.begin(), std::bind2nd(std::divides<T>(), sum2));
-    _transition.push_back(tmp1);
-    _emission.push_back(tmp2);
+    std::vector<T> tmp;
+    for (int j = 0; j < _nstates; ++j )
+      tmp.push_back(std::rand()%MOD);
+    auto sum = std::accumulate(tmp.begin(), tmp.end(), (T)0);
+    std::transform(tmp.begin(), tmp.end(), tmp.begin(), std::bind2nd(std::divides<T>(), sum));
+    _transition.push_back(tmp);
   } // for
 
   auto sum = std::accumulate(_initial.begin(), _initial.end(), (T)0);
   std::transform(_initial.begin(), _initial.end(), _initial.begin(), std::bind2nd(std::divides<T>(), sum));
+
+  for ( int i = 0; i < _nstates; ++i ) {
+    std::vector<T> tmp;
+    for ( int j = 0; j < _nsymbols; ++j )
+      tmp.push_back(std::rand()%MOD);
+    auto sum = std::accumulate(tmp.begin(), tmp.end(), (T)0);
+    std::transform(tmp.begin(), tmp.end(), tmp.begin(), std::bind2nd(std::divides<T>(), sum));
+    _emission.push_back(tmp);
+  } // for
+
   do_log(_initial);
   do_log(_transition);
   do_log(_emission);
